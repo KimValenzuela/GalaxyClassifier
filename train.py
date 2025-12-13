@@ -9,12 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from dataset import GalaxyDataset, CLASS_COLS
-from model import get_resnet50
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-
 class EarlyStopping:
     def __init__(self, patience=10, min_delta=0.0):
         self.petience = patience
