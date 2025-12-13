@@ -77,7 +77,7 @@ class TrainerGalaxyClassifier:
         self.model.train()
         train_loss = 0.0
 
-        for x, y in self.train_loader:
+        for x, y, _ in self.train_loader:
             x = x.to(self.device)
             y = y.to(self.device)
 
@@ -104,7 +104,7 @@ class TrainerGalaxyClassifier:
         val_loss = 0.0
 
         with torch.no_grad():
-            for x, y in self.val_loader:
+            for x, y, _ in self.val_loader:
                 x = x.to(self.device)
                 y = y.to(self.device)
 
