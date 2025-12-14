@@ -23,7 +23,7 @@ class EarlyStopping:
         
         if current_score < (self.best_score + self.min_delta):
             self.counter += 1
-            return self.counter >= patience
+            return self.counter >= self.patience
         else:
             self.best_score = current_score
             self.counter = 0
