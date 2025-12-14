@@ -3,6 +3,11 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from astropy.io import fits
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from torchvision import transforms
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 CLASS_COLS = [
     "p_smooth",
@@ -12,7 +17,7 @@ CLASS_COLS = [
     "p_unclassifiable",
 ]
 
-class GalaxyDataset(Dataset):
+class PreprocessImages(Dataset):
     def __init__(self, df, img_dir, transform=None, log_scale=True, eps=1e-8):
         """
         df: DataFrame con columnas [ID] + CLASS_COLS
@@ -67,4 +72,133 @@ class GalaxyDataset(Dataset):
         y = torch.from_numpy(probs)
 
         return img, y
+
+
+class GalaxyDataset:
+    def __init__(
+        self, 
+        labels_path: str,
+        img_dir: str,
+        class_col: list,
+        img_size: int = 80,
+        batch_size: int = 32,
+        test_size: float = 0.2,
+        random_state: int = 42,
+        num_workers: int = 4,
+        use_weighted_sampler: bool = True,
+        eps: float = 1e-6,
+        train_transform = None, 
+        val_transform = None
+    ):
+        self.labels_path = labels_path
+        self.img_dir = img_dir
+        self.class_col = class_col
+        self.img_size = img_size
+        self.batch_size = batch_size
+        self.test_size = test_size
+        self.random_state = random_state
+        self.num_workers = num_workers
+        self.use_weighted_sampler = use_weighted_sampler
+        self.eps = eps
+
+        self.num_classes = len(class_col)
+
+        # Transforms
+        self.train_transform = train_transform or self._default_train_transform()
+        self.val_transform = val_transform or self._default_val_transform()
+
+        # Inicialización en setup()
+        self.train_df = None
+        self.val_df = None
+        self.train_dataset = None
+        self.val_dataset = None
+        self.train_sampler = None
+
+    def _default_train_transform(self):
+        train_transform = transforms.Compose([
+            transforms.Resize((self.img_size, self.img_size)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomRotation(180)
+        ])
+        return train_transform
+
+    def _default_val_transform(self):
+        val_transform = transforms.Compose([
+            transforms.Resize((self.img_size, self.img_size))
+        ])
+        return val_transform
+
+    def setup(self):
+        df = pd.read_csv(self.labels_path)
+
+        for col in self.class_col:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Hard labels para estratificación
+        probs = df[self.class_col].values
+        df["hard_label"] = probs.argmax(axis=1)
+
+        # Split estratificado
+        self.train_df, self.val_df = train_test_split(
+            df,
+            test_size=self.test_size,
+            shuffle=True,
+            stratify=df["hard_label"],
+            random_state=self.random_state
+        )
+
+        # Datasets
+        self.train_dataset = GalaxyDataset(
+            self.train_df,
+            self.img_dir,
+            transform=self.train_transform
+        )
+
+        self.val_dataset = GalaxyDataset(
+            self.val_df,
+            self.img_dir,
+            transform=self.val_transform
+        )
+
+        # Sampler opcional
+        if self.use_weighted_sampler:
+            self.train_sampler = self._create_weighted_sampler()
+        else:
+            self.train_sampler = None
+
+    def _create_weighted_sampler(self):
+        hard_labels = self.train_df["hard_label"].values
+        class_counts = np.bincount(hard_labels, minlength=self.num_classes)
+
+        class_weights = 1.0 / (class_counts + self.eps)
+        sample_weights = class_weights[hard_labels]
+
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(sample_weights),
+            replacement=True
+        )
+        return sampler
+
+    # Dataloaders
+    def train_dataloader(self):
+        train_dataloader = DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            sampler=self.train_sampler,
+            shuffle=False if self.train_sampler else True,
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
+        return train_dataloader
+
+    def val_dataloader(self):
+        val_dataloader = DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
 
