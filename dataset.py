@@ -201,4 +201,5 @@ class GalaxyDataset:
             num_workers=self.num_workers,
             pin_memory=True
         )
+        return val_dataloader
 
