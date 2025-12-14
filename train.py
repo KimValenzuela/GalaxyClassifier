@@ -157,6 +157,7 @@ class TrainerGalaxyClassifier:
             if val_f1score > best_val_f1:
                 best_val_f1 = val_f1score
                 torch.save(self.model.state_dict(), f"{self.model_name}_weights.pth")
+                print("Modelo guardado")
 
             self.train_accuracy.reset()
             self.train_f1score.reset()
