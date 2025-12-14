@@ -11,7 +11,7 @@ import seaborn as sns
 
 class EarlyStopping:
     def __init__(self, patience=10, min_delta=0.0):
-        self.petience = patience
+        self.patience = patience
         self.min_delta = min_delta
         self.best_score = None
         self.counter = 0
