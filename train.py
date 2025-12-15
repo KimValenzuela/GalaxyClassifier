@@ -2,6 +2,7 @@ import torch
 from torchmetrics.classification import Accuracy, ConfusionMatrix, F1Score
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tqdm import tqdm
 
 class EarlyStopping:
     def __init__(self, patience=10, min_delta=0.0):
@@ -30,7 +31,7 @@ class TrainerGalaxyClassifier:
         model,
         model_name,
         optimizer,
-        criterion,
+        fn_loss,
         train_loader,
         val_loader,
         num_classes,
@@ -42,7 +43,7 @@ class TrainerGalaxyClassifier:
         self.model = model
         self.model_name = model_name
         self.optimizer = optimizer
-        self.criterion = criterion
+        self.fn_loss = fn_loss
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.num_classes = num_classes
@@ -54,8 +55,10 @@ class TrainerGalaxyClassifier:
         #Metricas
         self.train_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
         self.val_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
-        self.train_f1score = F1Score(task="multiclass", num_classes=num_classes).to(device)
-        self.val_f1score = F1Score(task="multiclass", num_classes=num_classes).to(device)
+        # macro -> calcula estadísticas por cada etiqueta y las promedia
+        self.train_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
+        self.val_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
+        self.val_f1score_topk = F1Score(task="multiclass", num_classes=num_classes, average=None, top_k=2).to(device)
         self.confusion_matrix = ConfusionMatrix(task="multiclass", num_classes=num_classes, normalize="true").to(device)
 
         self.history = {
@@ -71,12 +74,12 @@ class TrainerGalaxyClassifier:
         self.model.train()
         train_loss = 0.0
 
-        for x, y in self.train_loader:
+        for x, y in tqdm(self.train_loader):
             x = x.to(self.device)
             y = y.to(self.device)
 
             logits = self.model(x)
-            loss = self.criterion(logits, y)
+            loss = self.fn_loss(logits, y)
 
             loss.backward()
             self.optimizer.step()
@@ -103,12 +106,16 @@ class TrainerGalaxyClassifier:
                 y = y.to(self.device)
 
                 logits = self.model(x)
-                loss = self.criterion(logits, y)
+                loss = self.fn_loss(logits, y)
 
                 val_loss += loss.item()
 
                 preds = logits.argmax(dim=1)
-                targets = y.argmax(dim=1) if self.use_soft_labels else y
+                if self.use_soft_labels:
+                    targets = y
+                    self.val_f1score_topk.update(preds, targets)
+                else:
+                    targets = y.argmax(dim=1)
 
                 self.val_accuracy.update(preds, targets)
                 self.val_f1score.update(preds, targets)
@@ -129,6 +136,9 @@ class TrainerGalaxyClassifier:
             val_accuracy = self.val_accuracy.compute().item()
             val_f1score = self.val_f1score.compute().item()
 
+            if self.use_soft_labels:
+                val_f1score_topk = self.val_f1score_topk.compute().item()
+
             if self.scheduler:
                 if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     self.scheduler.step(val_loss)
@@ -148,21 +158,23 @@ class TrainerGalaxyClassifier:
             self.history["train_f1score"].append(train_f1score)
             self.history["val_f1score"].append(val_f1score)
 
-            print(
-                f"Epoch [{epoch + 1}/{epochs}] | "
-                f"Train Loss: {train_loss: .4f}, Acc: {train_accuracy: .4f}, F1: {train_f1score: .4f} | "
-                f"Val Loss: {val_loss: .4f}, Acc: {val_accuracy: .4f}, F1: {val_f1score: .4f}"
-            )
+            print(f"Epoch [{epoch + 1}/{epochs}]")
+            print(f"\tTrain → Loss: {train_loss: .4f} | Acc: {train_accuracy: .4f} | F1: {train_f1score: .4f}")
+            if self.use_soft_labels:
+                print(f"\tVal → Loss: {val_loss: .4f} | Acc: {val_accuracy: .4f} | F1: {val_f1score: .4f} | F1 (topk): {val_f1score_topk: .4f}")
+            else:
+                print(f"\tVal → Loss: {val_loss: .4f} | Acc: {val_accuracy: .4f} | F1: {val_f1score: .4f}")
 
             if val_f1score > best_val_f1:
                 best_val_f1 = val_f1score
                 torch.save(self.model.state_dict(), f"{self.model_name}_weights.pth")
-                print("Modelo guardado")
 
             self.train_accuracy.reset()
             self.train_f1score.reset()
             self.val_accuracy.reset()
             self.val_f1score.reset()
+            if self.use_soft_labels:
+                self.val_f1score_topk.reset()
 
 
     def plot_confusion_matrix(self):
