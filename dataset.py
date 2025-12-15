@@ -54,6 +54,9 @@ class PreprocessImage(Dataset):
         # (H, W) -> (1, H, W)
         img = img.astype("float32")
         img = torch.from_numpy(img).unsqueeze(0)  # 1 canal
+
+        # Normalización
+        img = (img - img.mean()) / (img.std() + self.eps)
         return img
 
     def __getitem__(self, idx):
@@ -80,7 +83,7 @@ class GalaxyDataset:
         labels_path: str,
         img_dir: str,
         class_cols: list,
-        img_size: int = 80,
+        img_size: int = 224,
         batch_size: int = 32,
         test_size: float = 0.2,
         random_state: int = 42,
