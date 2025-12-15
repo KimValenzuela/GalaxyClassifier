@@ -60,6 +60,7 @@ class TrainerGalaxyClassifier:
         self.val_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
         #self.val_f1score_topk = F1Score(task="multiclass", num_classes=num_classes, average=None, top_k=2).to(device)
         self.confusion_matrix = ConfusionMatrix(task="multiclass", num_classes=num_classes, normalize="true").to(device)
+        self.best_confusion_matrix = None
 
         self.history = {
             "train_loss": [],
@@ -78,13 +79,14 @@ class TrainerGalaxyClassifier:
             x = x.to(self.device)
             y = y.to(self.device)
 
+            self.optimizer.zero_grad()
+
             logits = self.model(x)
             loss = self.fn_loss(logits, y)
 
             loss.backward()
             self.optimizer.step()
-            self.optimizer.zero_grad()
-
+            
             train_loss += loss.item()
 
             preds = logits
@@ -99,6 +101,8 @@ class TrainerGalaxyClassifier:
     def validate(self):
         self.model.eval()
         val_loss = 0.0
+
+        self.confusion_matrix.reset()
 
         with torch.no_grad():
             for x, y in self.val_loader:
@@ -155,11 +159,13 @@ class TrainerGalaxyClassifier:
 
             print(f"Epoch [{epoch + 1}/{epochs}]")
             print(f"\tTrain → Loss: {train_loss: .4f} | Acc: {train_accuracy: .4f} | F1: {train_f1score: .4f}")
-            print(f"\tVal → Loss: {val_loss: .4f} | Acc: {val_accuracy: .4f} | F1: {val_f1score: .4f}")
+            print(f"\tVal   → Loss: {val_loss: .4f} | Acc: {val_accuracy: .4f} | F1: {val_f1score: .4f}")
 
             if val_f1score > best_val_f1:
                 best_val_f1 = val_f1score
                 torch.save(self.model.state_dict(), f"{self.model_name}_weights.pth")
+                self.best_confusion_matrix = self.confusion_matrix.compute().detach().cpu()
+                print("Modelo guardado")
 
             self.train_accuracy.reset()
             self.train_f1score.reset()
@@ -168,7 +174,10 @@ class TrainerGalaxyClassifier:
 
 
     def plot_confusion_matrix(self):
-        cm = self.confusion_matrix.compute().cpu().numpy()
+        if self.best_confusion_matrix is None:
+            raise RuntimeError("Matriz de confusión no disponible")
+
+        cm = self.best_confusion_matrix.numpy()
 
         plt.figure(figsize=(6, 5))
         sns.heatmap(
