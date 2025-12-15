@@ -48,8 +48,8 @@ class PreprocessImage(Dataset):
         img = np.clip(img, vmin, vmax)
         img = (img - vmin) / (vmax - vmin + self.eps)  # [0,1]
 
-        if self.log_scale:
-            img = np.log1p(img)  # resalta estructura débil
+        # if self.log_scale:
+        #     img = np.log1p(img)  # resalta estructura débil
 
         # (H, W) -> (1, H, W)
         img = img.astype("float32")
