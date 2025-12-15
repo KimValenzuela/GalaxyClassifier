@@ -87,8 +87,8 @@ class TrainerGalaxyClassifier:
 
             train_loss += loss.item()
 
-            preds = logits.argmax(dim=1)
-            targets = y.argmax(dim=1) if self.use_soft_labels else y
+            preds = logits.argmax(dim=1) 
+            targets = y.argmax(dim=1)
 
             self.train_accuracy.update(preds, targets)
             self.train_f1score.update(preds, targets)
@@ -110,12 +110,13 @@ class TrainerGalaxyClassifier:
 
                 val_loss += loss.item()
 
-                preds = logits.argmax(dim=1)
+                targets = y.argmax(dim=1)
+                
                 if self.use_soft_labels:
-                    targets = y
+                    preds = logits
                     self.val_f1score_topk.update(preds, targets)
                 else:
-                    targets = y.argmax(dim=1)
+                    preds = logits.argmax(dim=1)
 
                 self.val_accuracy.update(preds, targets)
                 self.val_f1score.update(preds, targets)
