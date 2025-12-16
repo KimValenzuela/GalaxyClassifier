@@ -230,7 +230,7 @@ class TrainerGalaxyClassifier:
             if early_stopping:
                 stop = early_stopping.step(val_f1score)
                 if stop:
-                    print(f"\nEarly Stopping at epoch {epoch+1}")
+                    print(f"\n🛑 Early Stopping at epoch {epoch+1}")
                     break
 
             # Guarda historial
