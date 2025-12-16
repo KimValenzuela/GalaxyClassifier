@@ -184,8 +184,15 @@ class GalaxyDataset:
         # Calcula pesos de clase para Focal Loss
         hard_labels = self.train_df["hard_label"].values
         class_counts = np.bincount(hard_labels, minlength=self.num_classes)
-        self.class_weights = 1.0 / (class_counts + self.eps)
-        self.class_weights = self.class_weights / self.class_weights.sum() * self.num_classes
+        
+        # MÉTODO 1: Pesos suavizados (Effective Number of Samples)
+        # Más robusto que 1/count
+        beta = 0.9999
+        effective_num = 1.0 - np.power(beta, class_counts)
+        self.class_weights = (1.0 - beta) / (effective_num + self.eps)
+        
+        # Normaliza para que el peso promedio sea 1.0
+        self.class_weights = self.class_weights / self.class_weights.mean()
         
         print("\n📊 Distribución de clases (Train):")
         for i, (name, count) in enumerate(zip(self.class_cols, class_counts)):
