@@ -48,15 +48,15 @@ class PreprocessImage(Dataset):
         img = np.clip(img, vmin, vmax)
         img = (img - vmin) / (vmax - vmin + self.eps)  # [0,1]
 
-        # if self.log_scale:
-        #     img = np.log1p(img)  # resalta estructura débil
+        if self.log_scale:
+            img = np.log1p(img)  # resalta estructura débil
 
         # (H, W) -> (1, H, W)
         img = img.astype("float32")
         img = torch.from_numpy(img).unsqueeze(0)  # 1 canal
 
         # Normalización
-        img = (img - img.mean()) / (img.std() + self.eps)
+        #img = (img - img.mean()) / (img.std() + self.eps)
         return img
 
     def __getitem__(self, idx):
