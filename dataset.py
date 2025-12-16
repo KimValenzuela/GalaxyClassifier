@@ -19,12 +19,6 @@ CLASS_COLS = [
 
 class PreprocessImage(Dataset):
     def __init__(self, df, img_dir, transform=None, log_scale=True, eps=1e-8):
-        """
-        df: DataFrame con columnas [ID] + CLASS_COLS
-        img_dir: carpeta donde están los .fits
-        transform: transforms de torchvision (que acepten tensores CHW)
-        log_scale: si True, aplica log(1 + x) a la imagen
-        """
         self.df = df.reset_index(drop=True)
         self.img_dir = img_dir
         self.transform = transform
@@ -56,7 +50,7 @@ class PreprocessImage(Dataset):
         img = torch.from_numpy(img).unsqueeze(0)  # 1 canal
 
         # Normalización
-        #img = (img - img.mean()) / (img.std() + self.eps)
+        img = (img - img.mean()) / (img.std() + self.eps)
         return img
 
     def __getitem__(self, idx):
