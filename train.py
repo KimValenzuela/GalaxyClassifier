@@ -206,10 +206,7 @@ class TrainerGalaxyClassifier:
         plt.subplot(1,3,1)
         plt.plot(epochs, self.history["train_loss"], label="Train")
         plt.plot(epochs, self.history["val_loss"], label="Validation")
-        plt.axhline(best_val_loss, linestyle="--",
-                label=f"Best Val Loss = {best_val_loss:.4f}")
-        plt.axvline(best_epoch_loss, linestyle=":",
-                    label=f"Epoch {best_epoch_loss}")
+        plt.axhline(best_val_loss, linestyle="--", color="tab:red", alpha=0.8, label=f"Best Val Loss = {best_val_loss:.4f}")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.title("Loss")
@@ -224,10 +221,7 @@ class TrainerGalaxyClassifier:
         plt.subplot(1,3,2)
         plt.plot(epochs, self.history["train_accuracy"], label="Train")
         plt.plot(epochs, self.history["val_accuracy"], label="Validation")
-        plt.axhline(best_val_acc, linestyle="--",
-                label=f"Best Val Acc = {best_val_acc:.4f}")
-        plt.axvline(best_epoch_acc, linestyle=":",
-                    label=f"Epoch {best_epoch_acc}")
+        plt.axhline(best_val_acc, linestyle="--", color="tab:red", alpha=0.8, label=f"Best Val Acc = {best_val_acc:.4f}")
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy")
         plt.title("Accuracy")
@@ -242,10 +236,7 @@ class TrainerGalaxyClassifier:
         plt.subplot(1,3,3)
         plt.plot(epochs, self.history["train_f1score"], label="Train")
         plt.plot(epochs, self.history["val_f1score"], label="Validation")
-        plt.axhline(best_val_f1, linestyle="--",
-                label=f"Best Val F1 = {best_val_f1:.4f}")
-        plt.axvline(best_epoch_f1, linestyle=":",
-                    label=f"Epoch {best_epoch_f1}")
+        plt.axhline(best_val_f1, linestyle="--", color="tab:red", alpha=0.8, label=f"Best Val F1 = {best_val_f1:.4f}")
         plt.xlabel("Epoch")
         plt.ylabel("F1-Score")
         plt.title("F1-Score")
