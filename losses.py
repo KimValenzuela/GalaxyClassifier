@@ -45,22 +45,30 @@ class FocalLoss(nn.Module):
         probs = F.softmax(logits, dim=1)
         log_probs = F.log_softmax(logits, dim=1)
         
+        # Calcula p_t: probabilidad de la clase correcta
+        # Para soft labels: p_t = sum(target_i * prob_i)
+        p_t = (targets * probs).sum(dim=1, keepdim=True)  # (B, 1)
+        
         # Focal term: (1 - p_t)^gamma
-        # Cuanto más confiado en la predicción correcta, menor peso
-        focal_weight = (1 - probs) ** self.gamma
+        focal_weight = (1 - p_t) ** self.gamma  # (B, 1)
         
-        # Cross entropy con focal weight
-        ce = -(targets * log_probs)
-        focal_loss = focal_weight * ce
+        # Cross entropy: -sum(target_i * log(prob_i))
+        ce = -(targets * log_probs)  # (B, C)
         
-        # Aplica pesos por clase (alpha)
+        # Aplica focal weight
+        focal_loss = focal_weight * ce  # (B, C)
+        
+        # Aplica pesos por clase (alpha) si están definidos
         if self.alpha is not None:
             if self.alpha.device != focal_loss.device:
                 self.alpha = self.alpha.to(focal_loss.device)
-            alpha_t = self.alpha.unsqueeze(0)  # (1, C)
-            focal_loss = alpha_t * focal_loss
+            
+            # Calcula alpha efectivo por sample según la distribución target
+            # alpha_t = sum(target_i * alpha_i)
+            alpha_t = (targets * self.alpha.unsqueeze(0)).sum(dim=1, keepdim=True)  # (B, 1)
+            focal_loss = alpha_t * focal_loss  # (B, C)
         
-        # Reduce
+        # Reduce por clase
         focal_loss = focal_loss.sum(dim=1)  # (B,)
         
         if self.reduction == 'mean':
