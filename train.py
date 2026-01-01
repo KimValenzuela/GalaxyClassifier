@@ -122,9 +122,7 @@ class TrainerGalaxyClassifier:
         best_val_rmse = float("inf")
 
         for epoch in range(epochs):
-            train_loss = self.train_one_epoch()
-            val_loss = self.validate()
-
+   
             train_loss, train_rmse = self.train_one_epoch()
             val_loss, val_rmse = self.validate()
 
