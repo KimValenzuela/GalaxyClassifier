@@ -1,5 +1,6 @@
 import torch
-from torchmetrics.classification import Accuracy, ConfusionMatrix, F1Score, MeanSquaredError
+from torchmetrics.classification import Accuracy, ConfusionMatrix, F1Score
+from torchmetrics.regression import MeanSquaredError
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
@@ -7,6 +8,9 @@ import torch.nn.functional as F
 
 class EarlyStopping:
     def __init__(self, patience=10, min_delta=0.0):
+        """
+        Early stopping for metrics that must be MINIMIZED (e.g. RMSE)
+        """
         self.patience = patience
         self.min_delta = min_delta
         self.best_score = None
@@ -16,14 +20,14 @@ class EarlyStopping:
         if self.best_score is None:
             self.best_score = current_score
             return False
-        
-        if current_score < (self.best_score + self.min_delta):
-            self.counter += 1
-            return self.counter >= self.patience
-        else:
+
+        if current_score < self.best_score - self.min_delta:
             self.best_score = current_score
             self.counter = 0
             return False
+
+        self.counter += 1
+        return self.counter >= self.patience
 
 
 class TrainerGalaxyClassifier:
@@ -57,11 +61,6 @@ class TrainerGalaxyClassifier:
         self.train_rmse = MeanSquaredError(squared=False).to(device)
         self.val_rmse = MeanSquaredError(squared=False).to(device)
 
-        #self.train_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
-        #self.val_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
-        # macro -> calcula estadísticas por cada etiqueta y las promedia
-        #self.train_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
-        #self.val_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
         self.confusion_matrix = ConfusionMatrix(task="multiclass", num_classes=num_classes, normalize="true").to(device)
         self.best_confusion_matrix = None
 
