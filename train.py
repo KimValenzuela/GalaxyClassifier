@@ -1,8 +1,9 @@
 import torch
-from torchmetrics.classification import Accuracy, ConfusionMatrix, F1Score
+from torchmetrics.classification import Accuracy, ConfusionMatrix, F1Score, MeanSquaredError
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
+import torch.nn.functional as F
 
 class EarlyStopping:
     def __init__(self, patience=10, min_delta=0.0):
@@ -53,26 +54,27 @@ class TrainerGalaxyClassifier:
         self.class_names = class_names
 
         #Metricas
-        self.train_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
-        self.val_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
+        self.train_rmse = MeanSquaredError(squared=False).to(device)
+        self.val_rmse = MeanSquaredError(squared=False).to(device)
+
+        #self.train_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
+        #self.val_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(device)
         # macro -> calcula estadísticas por cada etiqueta y las promedia
-        self.train_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
-        self.val_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
-        #self.val_f1score_topk = F1Score(task="multiclass", num_classes=num_classes, average=None, top_k=2).to(device)
+        #self.train_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
+        #self.val_f1score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
         self.confusion_matrix = ConfusionMatrix(task="multiclass", num_classes=num_classes, normalize="true").to(device)
         self.best_confusion_matrix = None
 
         self.history = {
             "train_loss": [],
             "val_loss": [],
-            "train_accuracy": [],
-            "val_accuracy": [],
-            "train_f1score": [],
-            "val_f1score": []
+            "train_rmse": [],
+            "val_rmse": []
         }
 
     def train_one_epoch(self):
         self.model.train()
+        self.train_rmse.reset()
         train_loss = 0.0
 
         for x, y in tqdm(self.train_loader):
@@ -89,20 +91,17 @@ class TrainerGalaxyClassifier:
             
             train_loss += loss.item()
 
-            preds = logits
-            targets = y.argmax(dim=1)
+            probs = F.softmax(logits, dim=1)
+            self.train_rmse.update(probs, y)
 
-            self.train_accuracy.update(preds, targets)
-            self.train_f1score.update(preds, targets)
-
-        return train_loss / len(self.train_loader)
+        return train_loss / len(self.train_loader), self.train_rmse.compute().item()
 
 
     def validate(self):
         self.model.eval()
         val_loss = 0.0
 
-        self.confusion_matrix.reset()
+        self.val_rmse.reset()
 
         with torch.no_grad():
             for x, y in self.val_loader:
@@ -114,135 +113,73 @@ class TrainerGalaxyClassifier:
 
                 val_loss += loss.item()
 
-                targets = y.argmax(dim=1)
-                
-                preds = logits
-                targets = y.argmax(dim=1)
+                probs = F.softmax(logits, dim=1)
+                self.val_rmse.update(probs, y)
 
-                self.val_accuracy.update(preds, targets)
-                self.val_f1score.update(preds, targets)
-                self.confusion_matrix.update(preds, targets)
-
-        return val_loss / len(self.val_loader)
+        return val_loss / len(self.val_loader), self.val_rmse.compute().item()
 
 
     def fit(self, epochs, early_stopping=None):
-        best_val_f1 = 0.0
+        best_val_rmse = float("inf")
 
         for epoch in range(epochs):
             train_loss = self.train_one_epoch()
             val_loss = self.validate()
 
-            train_accuracy = self.train_accuracy.compute().item()
-            train_f1score = self.train_f1score.compute().item()
-            val_accuracy = self.val_accuracy.compute().item()
-            val_f1score = self.val_f1score.compute().item()
+            train_loss, train_rmse = self.train_one_epoch()
+            val_loss, val_rmse = self.validate()
 
             if self.scheduler:
                 if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    self.scheduler.step(val_loss)
+                    self.scheduler.step(val_rmse)
                 else:
                     self.scheduler.step()
 
             if early_stopping:
-                stop = early_stopping.step(val_f1score)
-                if stop:
-                    print(f"Early Stopping at epoch {epoch+1}")
+                if early_stopping.step(val_rmse):
+                    print(f"Early stopping at epoch {epoch+1}")
                     break
 
             self.history["train_loss"].append(train_loss)
             self.history["val_loss"].append(val_loss)
-            self.history["train_accuracy"].append(train_accuracy)
-            self.history["val_accuracy"].append(val_accuracy)
-            self.history["train_f1score"].append(train_f1score)
-            self.history["val_f1score"].append(val_f1score)
+            self.history.setdefault("train_rmse", []).append(train_rmse)
+            self.history.setdefault("val_rmse", []).append(val_rmse)
 
-            print(f"Epoch [{epoch + 1}/{epochs}]")
-            print(f"\tTrain → Loss: {train_loss: .4f} | Acc: {train_accuracy: .4f} | F1: {train_f1score: .4f}")
-            print(f"\tVal   → Loss: {val_loss: .4f} | Acc: {val_accuracy: .4f} | F1: {val_f1score: .4f}")
-
-            if val_f1score > best_val_f1:
-                best_val_f1 = val_f1score
+            print(f"Epoch [{epoch+1}/{epochs}]")
+            print(f" Train → Loss: {train_loss:.4f} | RMSE: {train_rmse:.4f}")
+            print(f" Val   → Loss: {val_loss:.4f} | RMSE: {val_rmse:.4f}")
+            
+            if val_rmse < best_val_rmse:
+                best_val_rmse = val_rmse
                 torch.save(self.model.state_dict(), f"{self.model_name}_weights.pth")
-                self.best_confusion_matrix = self.confusion_matrix.compute().detach().cpu()
                 print("Modelo guardado")
 
-            self.train_accuracy.reset()
-            self.train_f1score.reset()
-            self.val_accuracy.reset()
-            self.val_f1score.reset()
 
 
-    def plot_confusion_matrix(self):
-        if self.best_confusion_matrix is None:
-            raise RuntimeError("Matriz de confusión no disponible")
+    def plot_rmse_history(self):
+        epochs = range(1, len(self.history["train_rmse"]) + 1)
 
-        cm = self.best_confusion_matrix.numpy()
+        best_val_rmse = min(self.history["val_rmse"])
+        best_epoch = self.history["val_rmse"].index(best_val_rmse) + 1
 
-        plt.figure(figsize=(6, 5))
-        sns.heatmap(
-            cm,
-            annot=True,
-            fmt=".2f",
-            cmap="Blues",
-            xticklabels=self.class_names,
-            yticklabels=self.class_names
+        plt.figure(figsize=(7,5))
+        plt.plot(epochs, self.history["train_rmse"], label="Train RMSE")
+        plt.plot(epochs, self.history["val_rmse"], label="Validation RMSE")
+        plt.axhline(
+            best_val_rmse,
+            linestyle="--",
+            color="tab:red",
+            alpha=0.8,
+            label=f"Best Val RMSE = {best_val_rmse:.4f}"
         )
-        plt.xlabel("Predicted")
-        plt.ylabel("True")
-        plt.title("Confusion Matrix (Validation)")
+        plt.scatter(best_epoch, best_val_rmse, color="tab:red", zorder=3)
+
+        plt.xlabel("Epoch")
+        plt.ylabel("RMSE")
+        plt.title("RMSE vs Epoch")
+        plt.legend()
+        plt.grid(True)
         plt.tight_layout()
+        plt.savefig(f"{self.model_name}_rmse_curve.png", dpi=300)
         plt.show()
 
-
-    def plot_metrics_history(self):
-        epochs = range(1, len(self.history["train_loss"]) + 1)
-        plt.figure(figsize=(15,4))
-
-        # Loss
-        best_val_loss = min(self.history["val_loss"])
-        best_epoch_loss = self.history["val_loss"].index(best_val_loss) + 1
-
-        plt.subplot(1,3,1)
-        plt.plot(epochs, self.history["train_loss"], label="Train")
-        plt.plot(epochs, self.history["val_loss"], label="Validation")
-        plt.axhline(best_val_loss, linestyle="--", color="tab:red", alpha=0.8, label=f"Best Val Loss = {best_val_loss:.4f}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.title("Loss")
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(f"{self.model_name}_loss_curve.png", dpi=300)
-
-        # Accuracy
-        best_val_acc = max(self.history["val_accuracy"])
-        best_epoch_acc = self.history["val_accuracy"].index(best_val_acc) + 1
-
-        plt.subplot(1,3,2)
-        plt.plot(epochs, self.history["train_accuracy"], label="Train")
-        plt.plot(epochs, self.history["val_accuracy"], label="Validation")
-        plt.axhline(best_val_acc, linestyle="--", color="tab:red", alpha=0.8, label=f"Best Val Acc = {best_val_acc:.4f}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.title("Accuracy")
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(f"{self.model_name}_accuracy_curve.png", dpi=300)
-
-        # F1 Score
-        best_val_f1 = max(self.history["val_f1score"])
-        best_epoch_f1 = self.history["val_f1score"].index(best_val_f1) + 1
-
-        plt.subplot(1,3,3)
-        plt.plot(epochs, self.history["train_f1score"], label="Train")
-        plt.plot(epochs, self.history["val_f1score"], label="Validation")
-        plt.axhline(best_val_f1, linestyle="--", color="tab:red", alpha=0.8, label=f"Best Val F1 = {best_val_f1:.4f}")
-        plt.xlabel("Epoch")
-        plt.ylabel("F1-Score")
-        plt.title("F1-Score")
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(f"{self.model_name}_f1score_curve.png", dpi=300)
-
-        plt.tight_layout()
-        plt.show()
