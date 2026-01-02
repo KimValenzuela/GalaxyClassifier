@@ -95,6 +95,8 @@ class GalaxyDataset:
         self.class_cols = class_cols
         self.img_size = img_size
         self.batch_size = batch_size
+        self.train_size = train_size
+        self.val_size = val_size
         self.test_size = test_size
         self.random_state = random_state
         self.num_workers = num_workers
