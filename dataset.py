@@ -79,7 +79,9 @@ class GalaxyDataset:
         class_cols: list,
         img_size: int = 224,
         batch_size: int = 32,
-        test_size: float = 0.2,
+        train_size: float = 0.7,
+        val_size: float = 0.15, 
+        test_size: float = 0.15,
         random_state: int = 42,
         num_workers: int = 4,
         use_weighted_sampler: bool = True,
@@ -103,12 +105,17 @@ class GalaxyDataset:
         # Transforms
         self.train_transform = train_transform or self._default_train_transform()
         self.val_transform = val_transform or self._default_val_transform()
+        self.test_transform = test_transform or self._default_val_transform()
 
         # Inicialización en setup()
         self.train_df = None
         self.val_df = None
+        self.test_df = None
+
         self.train_dataset = None
         self.val_dataset = None
+        self.test_dataset = None
+
         self.train_sampler = None
 
     def _default_train_transform(self):
@@ -126,6 +133,11 @@ class GalaxyDataset:
         ])
         return val_transform
 
+    def _class_distribution(df, name):
+        dist = df["hard_label"].value_counts(normalize=True).sort_index()
+        print(f"\n{name} distribution:")
+        print(dist)
+
     def setup(self):
         df = pd.read_csv(self.labels_path)
 
@@ -137,13 +149,26 @@ class GalaxyDataset:
         df["hard_label"] = probs.argmax(axis=1)
 
         # Split estratificado
-        self.train_df, self.val_df = train_test_split(
+        self.train_df, df_temp = train_test_split(
             df,
-            test_size=self.test_size,
+            test_size=(1 - self.train_size),
             shuffle=True,
             stratify=df["hard_label"],
             random_state=self.random_state
         )
+
+        relative_test_size = self.test_size / (self.val_size + self.test_size)
+
+        self.val_df, self.test_df = train_test_split(
+            df_temp,
+            test_size=relative_test_size,
+            stratify=df_temp["hard_label"],
+            random_state=config["random_state"]
+        )
+
+        self._class_distribution(self.train_df, "Train")
+        self._class_distribution(self.val_df, "Validation")
+        self._class_distribution(self.test_df, "Test")
 
         # Datasets
         self.train_dataset = PreprocessImage(
@@ -158,6 +183,12 @@ class GalaxyDataset:
             transform=self.val_transform
         )
 
+        self.test_dataset = PreprocessImage(
+            self.test_df,
+            self.img_dir,
+            transform=self.test_transform
+        )
+        
         # Sampler opcional
         if self.use_weighted_sampler:
             self.train_sampler = self._create_weighted_sampler()
@@ -199,4 +230,14 @@ class GalaxyDataset:
             pin_memory=True
         )
         return val_dataloader
+
+    def test_dataloader(self):
+        test_dataloader = DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
+        return test_dataloader
 

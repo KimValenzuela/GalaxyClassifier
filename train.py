@@ -1,16 +1,12 @@
 import torch
-from torchmetrics.classification import Accuracy, ConfusionMatrix, F1Score
 from torchmetrics.regression import MeanSquaredError
 import matplotlib.pyplot as plt
-import seaborn as sns
 from tqdm import tqdm
 import torch.nn.functional as F
+import os
 
 class EarlyStopping:
     def __init__(self, patience=10, min_delta=0.0):
-        """
-        Early stopping for metrics that must be MINIMIZED (e.g. RMSE)
-        """
         self.patience = patience
         self.min_delta = min_delta
         self.best_score = None
@@ -33,6 +29,7 @@ class EarlyStopping:
 class TrainerGalaxyClassifier:
     def __init__(
         self, 
+        root_path,
         model,
         model_name,
         optimizer,
@@ -45,6 +42,7 @@ class TrainerGalaxyClassifier:
         use_soft_labels=False,
         class_names=None
     ):
+        self.root_path = root_path
         self.model = model
         self.model_name = model_name
         self.optimizer = optimizer
@@ -148,7 +146,7 @@ class TrainerGalaxyClassifier:
             
             if val_rmse < best_val_rmse:
                 best_val_rmse = val_rmse
-                torch.save(self.model.state_dict(), f"{self.model_name}_weights.pth")
+                torch.save(self.model.state_dict(), os.path.join(self.root_path, f"{self.model_name}_weights.pth"))
                 print("Modelo guardado")
 
 
@@ -177,6 +175,6 @@ class TrainerGalaxyClassifier:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f"{self.model_name}_rmse_curve.png", dpi=300)
+        plt.savefig(os.path.join(self.root_path, f"{self.model_name}_rmse_curve.png"), dpi=300)
         plt.show()
 
