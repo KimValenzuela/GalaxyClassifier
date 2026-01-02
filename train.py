@@ -59,9 +59,6 @@ class TrainerGalaxyClassifier:
         self.train_rmse = MeanSquaredError(squared=False).to(device)
         self.val_rmse = MeanSquaredError(squared=False).to(device)
 
-        self.confusion_matrix = ConfusionMatrix(task="multiclass", num_classes=num_classes, normalize="true").to(device)
-        self.best_confusion_matrix = None
-
         self.history = {
             "train_loss": [],
             "val_loss": [],
