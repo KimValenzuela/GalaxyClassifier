@@ -136,7 +136,7 @@ class GalaxyDataset:
         ])
         return val_transform
 
-    def _class_distribution(df, name):
+    def _class_distribution(self, df, name):
         dist = df["hard_label"].value_counts(normalize=True).sort_index()
         print(f"\n{name} distribution:")
         print(dist)
