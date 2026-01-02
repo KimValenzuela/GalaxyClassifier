@@ -87,7 +87,8 @@ class GalaxyDataset:
         use_weighted_sampler: bool = True,
         eps: float = 1e-6,
         train_transform = None, 
-        val_transform = None
+        val_transform = None,
+        test_transform = None
     ):
         self.labels_path = labels_path
         self.img_dir = img_dir
