@@ -166,7 +166,7 @@ class GalaxyDataset:
             df_temp,
             test_size=relative_test_size,
             stratify=df_temp["hard_label"],
-            random_state=config["random_state"]
+            random_state=self.random_state
         )
 
         self._class_distribution(self.train_df, "Train")
