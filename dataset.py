@@ -95,13 +95,15 @@ class GalaxyDataset:
         self.class_cols = class_cols
         self.img_size = img_size
         self.batch_size = batch_size
-        self.train_size = train_size
-        self.val_size = val_size
-        self.test_size = test_size
         self.random_state = random_state
         self.num_workers = num_workers
         self.use_weighted_sampler = use_weighted_sampler
         self.eps = eps
+
+        self.train_size = train_size
+        self.val_size = val_size
+        self.test_size = test_size
+        self.use_test_split = test_size > 0
 
         self.num_classes = len(class_cols)
 
@@ -141,7 +143,7 @@ class GalaxyDataset:
         print(f"\n{name} distribution:")
         print(dist)
 
-    def setup(self):
+    def _load_labels(self):
         df = pd.read_csv(self.labels_path)
 
         for col in self.class_cols:
@@ -151,52 +153,7 @@ class GalaxyDataset:
         probs = df[self.class_cols].values
         df["hard_label"] = probs.argmax(axis=1)
 
-        # Split estratificado
-        self.train_df, df_temp = train_test_split(
-            df,
-            test_size=(1 - self.train_size),
-            shuffle=True,
-            stratify=df["hard_label"],
-            random_state=self.random_state
-        )
-
-        relative_test_size = self.test_size / (self.val_size + self.test_size)
-
-        self.val_df, self.test_df = train_test_split(
-            df_temp,
-            test_size=relative_test_size,
-            stratify=df_temp["hard_label"],
-            random_state=self.random_state
-        )
-
-        self._class_distribution(self.train_df, "Train")
-        self._class_distribution(self.val_df, "Validation")
-        self._class_distribution(self.test_df, "Test")
-
-        # Datasets
-        self.train_dataset = PreprocessImage(
-            self.train_df,
-            self.img_dir,
-            transform=self.train_transform
-        )
-
-        self.val_dataset = PreprocessImage(
-            self.val_df,
-            self.img_dir,
-            transform=self.val_transform
-        )
-
-        self.test_dataset = PreprocessImage(
-            self.test_df,
-            self.img_dir,
-            transform=self.test_transform
-        )
-        
-        # Sampler opcional
-        if self.use_weighted_sampler:
-            self.train_sampler = self._create_weighted_sampler()
-        else:
-            self.train_sampler = None
+        return df
 
     def _create_weighted_sampler(self):
         hard_labels = self.train_df["hard_label"].values
@@ -211,6 +168,62 @@ class GalaxyDataset:
             replacement=True
         )
         return sampler
+
+    def _split_data(self, df):
+        # Split estratificado
+
+        if self.use_test_split:
+            assert abs(self.train_size + self.val_size + self.test_size - 1.0) < 1e-6
+        else:
+            assert abs(self.train_size + self.val_size - 1.0) < 1e-6
+
+        self.train_df, df_temp = train_test_split(
+            df,
+            test_size=(1 - self.train_size),
+            stratify=df["hard_label"],
+            random_state=self.random_state,
+        )
+
+        if self.use_test_split:
+            relative_test_size = self.test_size / (self.val_size + self.test_size)
+            self.val_df, self.test_df = train_test_split(
+                df_temp,
+                test_size=relative_test_size,
+                stratify=df_temp["hard_label"],
+                random_state=self.random_state
+            )
+        else:
+            self.val_df = df_temp
+            self.test_df = None
+
+        self._class_distribution(self.train_df, "Train")
+        self._class_distribution(self.val_df, "Validation")
+        if self.use_test_split:
+            self._class_distribution(self.test_df, "Test")
+
+
+    def _build_datasets(self):
+        self.train_dataset = PreprocessImage(
+            self.train_df, self.img_dir, transform=self.train_transform
+        )
+
+        self.val_dataset = PreprocessImage(
+            self.val_df, self.img_dir, transform=self.val_transform
+        )
+
+        if self.use_test_split:
+            self.test_dataset = PreprocessImage(
+                self.test_df, self.img_dir, transform=self.test_transform
+            )
+
+        if self.use_weighted_sampler:
+            self.train_sampler = self._create_weighted_sampler()
+
+    def setup(self):
+        df = self._load_labels()
+        self._split_data(df)
+        self._build_datasets()
+    
 
     # Dataloaders
     def train_dataloader(self):
