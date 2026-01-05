@@ -25,9 +25,9 @@ class ModelGalaxyClassifier(nn.Module):
                 model.conv1.bias[:] = old_conv.bias
         
         # Congelar model ANTES de modificar fc
-        for name, param in model.named_parameters():
-            if not name.startswith('fc'):  # No congelar fc (será reemplazado)
-                param.requires_grad = False
+        # for name, param in model.named_parameters():
+        #     if not name.startswith('fc'):  # No congelar fc (será reemplazado)
+        #         param.requires_grad = False
         
         # Clasificador final
         in_features = model.fc.in_features
@@ -37,8 +37,8 @@ class ModelGalaxyClassifier(nn.Module):
         )
         
         # Descongelar conv1 para ajuste fino
-        for param in model.conv1.parameters():
-            param.requires_grad = True
+        # for param in model.conv1.parameters():
+        #     param.requires_grad = True
         
         self.model = model
     
