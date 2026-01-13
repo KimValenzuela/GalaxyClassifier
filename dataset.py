@@ -18,12 +18,13 @@ CLASS_COLS = [
 ]
 
 class PreprocessImage(Dataset):
-    def __init__(self, df, img_dir, transform=None, log_scale=True, eps=1e-8):
+    def __init__(self, df, img_dir, transform=None, log_scale=True, eps=1e-8, return_labels=True):
         self.df = df.reset_index(drop=True)
         self.img_dir = img_dir
         self.transform = transform
         self.log_scale = log_scale
         self.eps = eps
+        self.return_labels = return_labels
 
     def __len__(self):
         return len(self.df)
@@ -64,11 +65,13 @@ class PreprocessImage(Dataset):
         if self.transform:
             img = self.transform(img)
 
-        # Soft label
-        probs = row[CLASS_COLS].astype(float).to_numpy(dtype="float32")
-        y = torch.from_numpy(probs)
-
-        return img, y
+        if self.return_labels:
+            # Soft label
+            probs = row[CLASS_COLS].astype(float).to_numpy(dtype="float32")
+            y = torch.from_numpy(probs)
+            return img, y
+        else:
+            return img
 
 
 class GalaxyDataset:
