@@ -3,10 +3,12 @@ import torch.nn.functional as F
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import os
 
 class GalaxyPredictor:
     def __init__(
         self,
+        root_path,
         model,
         device,
         class_names=None
@@ -57,8 +59,8 @@ class GalaxyPredictor:
         return pd.DataFrame(results)
 
 
-    def save_csv(self, df, path):
-        df.to_csv(path, index=False)
+    def save_csv(self, df):
+        df.to_csv(os.path.join(self.root_path, "clash_predictions.csv"), index=False)
 
     
     def visualize_sample(
