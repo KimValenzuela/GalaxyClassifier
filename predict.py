@@ -13,6 +13,7 @@ class GalaxyPredictor:
         device,
         class_names=None
     ):
+        self.root_path = root_path
         self.model = model.to(device)
         self.device = device
         self.class_names = class_names
