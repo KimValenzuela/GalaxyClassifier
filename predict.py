@@ -38,22 +38,21 @@ class GalaxyPredictor:
                 probs = F.softmax(logits, dim=1)
 
                 max_probs, preds = probs.max(dim=1)
+                probs_np = probs.cpu().numpy()
 
                 for i in range(len(preds)):
                     row = {
                         "pred_class": preds[i].item(),
+                        "pred_label": self.class_names[preds[i].item()],
                         "confidence": max_probs[i].item(),
                     }
 
-                    # Soft labels
-                    for c, p in enumerate(probs[i].cpu().numpy()):
-                        row[f"prob_class_{c}"] = p
+                    # Soft labels con nombres reales
+                    for class_name, p in zip(self.class_names, probs_np[i]):
+                        row[class_name] = float(p)
 
                     if threshold is not None:
                         row["accepted"] = max_probs[i].item() >= threshold
-
-                    if self.class_names:
-                        row["pred_label"] = self.class_names[preds[i].item()]
 
                     results.append(row)
 
@@ -80,10 +79,7 @@ class GalaxyPredictor:
 
         max_prob, pred = probs.max(dim=1)
 
-        label = (
-            self.class_names[pred.item()]
-            if self.class_names else pred.item()
-        )
+        label = self.class_names[pred.item()]
 
         plt.figure(figsize=(4, 4))
         plt.imshow(img.squeeze(), cmap="gray", origin="lower")
