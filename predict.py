@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
+import numpy as np
 
 class GalaxyPredictor:
     def __init__(
@@ -21,40 +22,37 @@ class GalaxyPredictor:
         self.model.eval()
 
 
-    def predict_batch(self, dataloader, threshold=None):
+    def predict_batch(self, dataloader, dataset, threshold=None):
         results = []
 
-        with torch.no_grad():
-            for batch in tqdm(dataloader):
-                # batch puede ser (x, y) o solo x
-                if isinstance(batch, (list, tuple)):
-                    x = batch[0]
-                else:
-                    x = batch
+        idx_global = 0
 
+        with torch.no_grad():
+            for x in tqdm(dataloader):
                 x = x.to(self.device)
 
-                logits = self.model(x)
-                probs = F.softmax(logits, dim=1)
-
+                probs = F.softmax(self.model(x), dim=1)
                 max_probs, preds = probs.max(dim=1)
                 probs_np = probs.cpu().numpy()
 
                 for i in range(len(preds)):
+                    img_id = dataset.df.iloc[idx_global]["ID"]
+
                     row = {
+                        "id": img_id,
                         "pred_class": preds[i].item(),
                         "pred_label": self.class_names[preds[i].item()],
                         "confidence": max_probs[i].item(),
                     }
 
-                    # Soft labels con nombres reales
-                    for class_name, p in zip(self.class_names, probs_np[i]):
-                        row[class_name] = float(p)
+                    for name, p in zip(self.class_names, probs_np[i]):
+                        row[name] = float(p)
 
                     if threshold is not None:
                         row["accepted"] = max_probs[i].item() >= threshold
 
                     results.append(row)
+                    idx_global += 1
 
         return pd.DataFrame(results)
 
@@ -91,4 +89,40 @@ class GalaxyPredictor:
             title += f"\nAccepted: {max_prob.item() >= threshold}"
 
         plt.title(title)
+        plt.show()
+
+
+    def visualize_by_label(
+        self,
+        dataset,
+        predictions_df,
+        label,
+        n=9
+    ):
+
+        df_label = predictions_df[
+            predictions_df["pred_label"] == label
+        ].head(n)
+
+        n = len(df_label)
+        cols = int(np.ceil(np.sqrt(n)))
+        rows = int(np.ceil(n / cols))
+
+        plt.figure(figsize=(3 * cols, 3 * rows))
+
+        for i, (_, row) in enumerate(df_label.iterrows()):
+            idx = dataset.df.index[
+                dataset.df["ID"] == row["image_id"]
+            ][0]
+
+            img = dataset[idx]
+            if isinstance(img, (tuple, list)):
+                img = img[0]
+
+            plt.subplot(rows, cols, i + 1)
+            plt.imshow(img.squeeze(), cmap="gray", origin="lower")
+            plt.axis("off")
+            plt.title(f"{row['pred_label']}\n{row['confidence']:.2f}")
+
+        plt.tight_layout()
         plt.show()
