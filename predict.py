@@ -112,7 +112,7 @@ class GalaxyPredictor:
 
         for i, (_, row) in enumerate(df_label.iterrows()):
             idx = dataset.df.index[
-                dataset.df["ID"] == row["image_id"]
+                dataset.df["ID"] == row["id"]
             ][0]
 
             img = dataset[idx]
